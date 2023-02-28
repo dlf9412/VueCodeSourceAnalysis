@@ -34,6 +34,10 @@ export function toggleObserving (value: boolean) {
  * object's property keys into getter/setters that
  * collect dependencies and dispatch updates.
  */
+/**
+ * 观察者类，会被附加到每个被观察的对象上，value._ob_=this
+ * 而对象的各个属性则会被转换成getter/setter，并收集依赖和通知更新
+ */
 export class Observer {
   value: any;
   dep: Dep;
@@ -103,18 +107,21 @@ function copyAugment (target: Object, src: Object, keys: Array<string>) {
 }
 
 /**
- * Attempt to create an observer instance for a value,
- * returns the new observer if successfully observed,
- * or the existing observer if the value already has one.
- */
+ * 响应式处理的真正入口
+ * 为对象创建观察者实例，如果对象已经被观察过，则返回已有的观察者实例，否则创建新的观察者实例
+ *  
+ */ 
 export function observe (value: any, asRootData: ?boolean): Observer | void {
+  // 非对象和Vnode实例不做响应式处理
   if (!isObject(value) || value instanceof VNode) {
     return
   }
   let ob: Observer | void
-  // 如果该数据已经是代理过的数据
+  // 如果该数据已经是代理过的数据，则直接返回_ob_属性
   if (hasOwn(value, '__ob__') && value.__ob__ instanceof Observer) {
+
     ob = value.__ob__
+
   } else if (
     shouldObserve &&
     !isServerRendering() &&
@@ -122,7 +129,7 @@ export function observe (value: any, asRootData: ?boolean): Observer | void {
     Object.isExtensible(value) &&
     !value._isVue
   ) {
-    // 对该数据进行响应式代理
+    // 创建观察者实例
     ob = new Observer(value)
   }
   if (asRootData && ob) {

@@ -36,6 +36,7 @@ const sharedPropertyDefinition = {
   set: noop
 }
 
+// 设置代理，将key 代理到target上
 export function proxy (target: Object, sourceKey: string, key: string) {
   sharedPropertyDefinition.get = function proxyGetter () {
     return this[sourceKey][key]
@@ -65,19 +66,22 @@ export function initState (vm: Component) {
   }
 }
 
+// 处理props对象，为props对象的每个属性设置响应式，并将其代理到vm实例上
 function initProps (vm: Component, propsOptions: Object) {
   const propsData = vm.$options.propsData || {}
   const props = vm._props = {}
-  // cache prop keys so that future props updates can iterate using Array
-  // instead of dynamic object key enumeration.
+  // 缓存props的每个key，性能优化
   const keys = vm.$options._propKeys = []
   const isRoot = !vm.$parent
   // root instance props should be converted
   if (!isRoot) {
     toggleObserving(false)
   }
+  // 遍历props对象
   for (const key in propsOptions) {
+    // 缓存key
     keys.push(key)
+    // 获取props[key]的默认值
     const value = validateProp(key, propsOptions, propsData, vm)
     /* istanbul ignore else */
     if (process.env.NODE_ENV !== 'production') {
@@ -89,7 +93,7 @@ function initProps (vm: Component, propsOptions: Object) {
           vm
         )
       }
-      // 响应式处理
+      // 为props的每个key设置数据响应式响应式
       defineReactive(props, key, value, () => {
         if (!isRoot && !isUpdatingChildComponent) {
           warn(
@@ -102,13 +106,12 @@ function initProps (vm: Component, propsOptions: Object) {
         }
       })
     } else {
+      // 为props的每个key设置数据响应式响应式
       defineReactive(props, key, value)
     }
-    // static props are already proxied on the component's prototype
-    // during Vue.extend(). We only need to proxy props defined at
-    // instantiation here.
     // 代理props,使得可以通过this[key]的方式直接访问props的数据
     if (!(key in vm)) {
+      // 代理 key 到 vm 对象上
       proxy(vm, `_props`, key)
     }
   }
