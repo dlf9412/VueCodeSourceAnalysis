@@ -133,7 +133,7 @@ function initData (vm: Component) {
       vm
     )
   }
-  // proxy data on instance
+  // 获取所有的data 的keys 
   const keys = Object.keys(data)
   const props = vm.$options.props
   const methods = vm.$options.methods

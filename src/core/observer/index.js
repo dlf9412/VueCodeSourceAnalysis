@@ -60,7 +60,8 @@ export class Observer {
         // value._proto_= arrayMethods,将value的原型指向 Array.prototype
         protoAugment(value, arrayMethods)
       } else {
-        // 赋值Array.prototype 的getOwnPropertyNames中的方法 到value上
+        // 赋值Array.prototype 的 getOwnPropertyNames 中的方法 到value上
+        // 也就是 数组的 七个方法到value上
         copyAugment(value, arrayMethods, arrayKeys)
       }
       this.observeArray(value)
@@ -94,8 +95,8 @@ export class Observer {
 // helpers
 
 /**
- * Augment a target Object or Array by intercepting
- * the prototype chain using __proto__
+ * 设置target._proto_ 的原型对象为src
+ * 比如数组对象，arr._proto_=arrayMethods
  */
 function protoAugment (target, src: Object) {
   /* eslint-disable no-proto */
@@ -104,8 +105,8 @@ function protoAugment (target, src: Object) {
 }
 
 /**
- * Augment a target Object or Array by defining
- * hidden properties.
+ * 在目标对象上定义指定属性
+ * 比如数组：为数组对象定义那7个方法
  */
 /* istanbul ignore next */
 function copyAugment (target: Object, src: Object, keys: Array<string>) {

@@ -26,11 +26,14 @@ const methodsToPatch = [
  * 拦截变异方法并触发事件
  */
 methodsToPatch.forEach(function (method) {
-  // cache original method
+  // 缓存原生方法，比如push
   const original = arrayProto[method]
+  // def 就是 Object.defineProperty,拦截 arrayMethods.method 的访问
   def(arrayMethods, method, function mutator (...args) {
+    // 先执行原生方法， 比如 push.apply(this,args)
     const result = original.apply(this, args)
     const ob = this.__ob__
+    // 如果method 是以下三个之一， 说明是新插入了元素
     let inserted
     switch (method) {
       case 'push':
@@ -41,8 +44,9 @@ methodsToPatch.forEach(function (method) {
         inserted = args.slice(2)
         break
     }
+    // 对新插入的元素做响应式处理
     if (inserted) ob.observeArray(inserted)
-    // notify change
+    // 通知更新
     ob.dep.notify()
     return result
   })
