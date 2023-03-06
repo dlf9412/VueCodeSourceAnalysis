@@ -45,25 +45,34 @@ export class Observer {
 
   constructor (value: any) {
     this.value = value
+    // 实例化一个dep
     this.dep = new Dep()
     this.vmCount = 0
+    // 在value对象上设置_ob_属性
     def(value, '__ob__', this)
+    // 判断value是否为数组
     if (Array.isArray(value)) {
+      /**
+       * hasProto = '__proto__' in {}
+       *  判断对象是否存在_proto_属性，通过obj._proto_可以访问对象的原型链
+       */
       if (hasProto) {
+        // value._proto_= arrayMethods,将value的原型指向 Array.prototype
         protoAugment(value, arrayMethods)
       } else {
+        // 赋值Array.prototype 的getOwnPropertyNames中的方法 到value上
         copyAugment(value, arrayMethods, arrayKeys)
       }
       this.observeArray(value)
     } else {
+      // value为对象，为对象中的每个值设置响应式
       this.walk(value)
     }
   }
 
   /**
-   * Walk through all properties and convert them into
-   * getter/setters. This method should only be called when
-   * value type is Object.
+   * 遍历对象上的每个 key，为每个key 设置响应式
+   * 仅当值为对象时才会走这里
    */
   walk (obj: Object) {
     const keys = Object.keys(obj)
@@ -73,7 +82,7 @@ export class Observer {
   }
 
   /**
-   * Observe a list of Array items.
+   * 遍历数组，为数组的每一项设置观察，处理数组元素为对象的情况
    */
   observeArray (items: Array<any>) {
     for (let i = 0, l = items.length; i < l; i++) {
@@ -139,6 +148,9 @@ export function observe (value: any, asRootData: ?boolean): Observer | void {
 }
 
 /**
+ * 拦截 obj[key]的读取和设置操作
+ * 1、在第一次读取时收集依赖，比如执行render 函数生成虚拟dom时会有读取操作
+ * 2、在更新时设置新值并通知依赖更新
  * Define a reactive property on an Object.
  */
 export function defineReactive (
@@ -148,40 +160,63 @@ export function defineReactive (
   customSetter?: ?Function,
   shallow?: boolean
 ) {
+  // 实例化dep,一个key 一个dep
   const dep = new Dep()
 
+  // 获取obj[key]的属性描述符，发现它是不可配置对象的话直接return
   const property = Object.getOwnPropertyDescriptor(obj, key)
   if (property && property.configurable === false) {
     return
   }
 
-  // cater for pre-defined getter/setters
+  // 记录getter和setter，获取val值
   const getter = property && property.get
   const setter = property && property.set
   if ((!getter || setter) && arguments.length === 2) {
     val = obj[key]
   }
 
+  // 递归调用，处理val 即 obj[key] 的值为对象的情况，保证对象中的所有key 都被观察
+  // 对 obj[key] 的值为对象的数据，递归 响应式处理该值
   let childOb = !shallow && observe(val)
   Object.defineProperty(obj, key, {
     enumerable: true,
     configurable: true,
+    // get 拦截对 obj[key] 的读取操作---依赖收集
     get: function reactiveGetter () {
       const value = getter ? getter.call(obj) : val
+      /**
+       * 
+       * Dep.target为 Dep 类的一个静态属性，值为watcher，在实例化 Watcher 时会被设置
+       * 实例化Watcher 时会执行 new Watcher 时传递的回调函数(computed 除外，因为它懒执行)
+       * 而回调函数中如果有 vm.key 的读取行为，则会触发这里的 读取 拦截，进行依赖收集
+       * 回调函数执行完以后又会将 Dep.target设置为null，避免这里重复收集依赖
+       * 
+       */ 
+
       if (Dep.target) {
+        // 依赖收集，在 dep 中添加 watcher，也在 watcher 中添加 dep
         dep.depend()
+        // childobj 表示对象中嵌套 对象的观察者对象，如果存在也对其进行依赖收集
         if (childOb) {
+          // 更新 childKey 被更新时能触发响应式的原因
           childOb.dep.depend()
+          // 如果obj[key] 是数组，则触发数组响应式
           if (Array.isArray(value)) {
+            // 为数组项为对象的项添加依赖
             dependArray(value)
           }
         }
       }
       return value
     },
+    // set 拦截 对 obj[key] 的设置操作
+    // 对已经收集的依赖的watcher进行通知
     set: function reactiveSetter (newVal) {
+      // 旧的 obj[key]
       const value = getter ? getter.call(obj) : val
       /* eslint-disable no-self-compare */
+      // 如果新老数据一样，则直接return，不更新，也不触发响应式更新过程
       if (newVal === value || (newVal !== newVal && value !== value)) {
         return
       }
@@ -189,14 +224,18 @@ export function defineReactive (
       if (process.env.NODE_ENV !== 'production' && customSetter) {
         customSetter()
       }
-      // #7981: for accessor properties without setter
+      // setter如果不存在，说明该属性是一个只读属性，直接return
       if (getter && !setter) return
+      // 设置新值
       if (setter) {
         setter.call(obj, newVal)
       } else {
         val = newVal
       }
+      // 对新值 进行观察，让新值也是响应式的
+      // observe 真正的响应式的处理
       childOb = !shallow && observe(newVal)
+      // 依赖通知更新
       dep.notify()
     }
   })
@@ -271,8 +310,8 @@ export function del (target: Array<any> | Object, key: any) {
 }
 
 /**
- * Collect dependencies on array elements when the array is touched, since
- * we cannot intercept array element access like property getters.
+ * 遍历每个数组元素，递归处理数组项为对象的情况，为其添加依赖
+ * 因为前面的递归阶段无法为数组中的对象元素添加依赖
  */
 function dependArray (value: Array<any>) {
   for (let e, i = 0, l = value.length; i < l; i++) {
