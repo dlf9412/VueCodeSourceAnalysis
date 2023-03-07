@@ -51,15 +51,25 @@ export function initState (vm: Component) {
   vm._watchers = []
   const opts = vm.$options
   // 处理props对象，为props对象的每个属性设置响应式，并将其代理到vm实例上
+  // shouldObserve = true
   if (opts.props) initProps(vm, opts.props)
-  // 处理methods对象，校验每个属性的值是否为函数，和props
+  // 
+  /**
+   * 处理methods对象，校验每个属性的值是否为函数，和props是否重名
+   */
   if (opts.methods) initMethods(vm, opts.methods)
-  // 初始化data
+  /**
+   * 做了三件事
+   * 1、判重，data对象上的属性不能和 props、methods 对象上的属性相同
+   * 2、代理 data 对象上的属性到 vm 实例 => this[dataKey]的方式获取
+   * 3、为data 对象上的数据设置响应式
+   */
   if (opts.data) {
     initData(vm)
   } else {
     observe(vm._data = {}, true /* asRootData */)
   }
+  // 
   if (opts.computed) initComputed(vm, opts.computed)
   if (opts.watch && opts.watch !== nativeWatch) {
     initWatch(vm, opts.watch)
@@ -115,12 +125,25 @@ function initProps (vm: Component, propsOptions: Object) {
       proxy(vm, `_props`, key)
     }
   }
+  // shouldObserve = true
   toggleObserving(true)
 }
 
+
+/**
+ * 做了三件事
+ * 1、判重处理，data 对象上的属性 不能和props、methods 对象上的属性相同
+ * 2、代理data 对象上的属性到 vm实例
+ * 3、为data 对象上的数据设置响应式
+ */
 function initData (vm: Component) {
   let data = vm.$options.data
-  // 判断data是否是个函数,如果是个函数,则调用这个方法获取函数中的data,如果不是函数,则直接使用data/{}
+  /**
+   * 获取data对象数据
+   * 1、判断是否为函数，
+   *      函数：调用该函数，获取data对象，并且调用pushTarget 方法 将Dep.target = target
+   *      非函数：赋值，或者给默认对象
+   */
   data = vm._data = typeof data === 'function'
     ? getData(data, vm)
     : data || {}
@@ -157,24 +180,28 @@ function initData (vm: Component) {
         vm
       )
     } else if (!isReserved(key)) {
-      // 将数据代理,使得可以通过this[dataKey]的方式访问和修改
+      // 将数据代理到vm实例上,使得可以通过this[dataKey]的方式访问和修改
       proxy(vm, `_data`, key)
     }
   }
   // 数据观测,响应式处理
-  // observe data
   observe(data, true /* asRootData */)
 }
 
 export function getData (data: Function, vm: Component): any {
-  // #7573 disable dep collection when invoking data getters
+  // 将 Dep.target = target
   pushTarget()
+  // 先执行try，调用方法，并返回结果(data对象)
+  // try 执行成功，内部直接return ，不再继续往下走
+  // try 执行成功，内部如果没有return， 则继续走finally
   try {
     return data.call(vm, vm)
   } catch (e) {
+    // try执行失败，return
     handleError(e, vm, `data()`)
     return {}
   } finally {
+    // 上面都执行失败
     popTarget()
   }
 }
@@ -276,8 +303,19 @@ function createGetterInvoker(fn) {
   }
 }
 
+/**
+ * 做了以下三件事，其实最关键的就是第三件事
+ * 1、校验 methods[key]，必须是一个函数
+ * 2、判重：
+ *    methods 中的key 不能和props 中的key 相同
+ *    methods 中的key 不能和Vue实例上已有的方法重叠，一般是一些内置方法，比如以 $和_开头的方法
+ * 3、将methods[key] 放到vm 实例上，得到 vm[key] = methods[key]
+ *  
+ */
 function initMethods (vm: Component, methods: Object) {
+  // 获取props 配置项
   const props = vm.$options.props
+  // 遍历methods 对象
   for (const key in methods) {
     if (process.env.NODE_ENV !== 'production') {
       if (typeof methods[key] !== 'function') {
@@ -301,7 +339,8 @@ function initMethods (vm: Component, methods: Object) {
         )
       }
     }
-    // 将method的this指向,指向vm
+    // 将method的this指向,指向vm => methods[key].bind(vm)
+    // 通知将 methods 挂载到当前vm下
     vm[key] = typeof methods[key] !== 'function' ? noop : bind(methods[key], vm)
   }
 }

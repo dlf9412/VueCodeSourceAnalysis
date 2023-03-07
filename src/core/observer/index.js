@@ -132,13 +132,7 @@ export function observe (value: any, asRootData: ?boolean): Observer | void {
 
     ob = value.__ob__
 
-  } else if (
-    shouldObserve &&
-    !isServerRendering() &&
-    (Array.isArray(value) || isPlainObject(value)) &&
-    Object.isExtensible(value) &&
-    !value._isVue
-  ) {
+  } else if (shouldObserve &&!isServerRendering() &&(Array.isArray(value) || isPlainObject(value)) && Object.isExtensibl(value) &&!value._isVue) {
     // 创建观察者实例
     ob = new Observer(value)
   }
@@ -234,7 +228,6 @@ export function defineReactive (
         val = newVal
       }
       // 对新值 进行观察，让新值也是响应式的
-      // observe 真正的响应式的处理
       childOb = !shallow && observe(newVal)
       // 依赖通知更新
       dep.notify()
