@@ -69,8 +69,20 @@ export function initState (vm: Component) {
   } else {
     observe(vm._data = {}, true /* asRootData */)
   }
-  // 
+  /**
+   * 三件事：
+   *   1、为 computed[key] 创建 watcher 实例，默认是懒执行
+   *   2、代理 computed[key] 到 vm 实例
+   *   3、判重，computed 中的 key 不能和 data、props 中的属性重复
+   */
   if (opts.computed) initComputed(vm, opts.computed)
+  
+    /**
+   * 三件事：
+   *   1、处理 watch 对象
+   *   2、为 每个 watch.key 创建 watcher 实例，key 和 watcher 实例可能是 一对多 的关系
+   *   3、如果设置了 immediate，则立即执行 回调函数
+   */
   if (opts.watch && opts.watch !== nativeWatch) {
     initWatch(vm, opts.watch)
   }
@@ -208,14 +220,31 @@ export function getData (data: Function, vm: Component): any {
 
 const computedWatcherOptions = { lazy: true }
 
+
+/**
+ * 三件事：
+ *   1、为 computed[key] 创建 watcher 实例，默认是懒执行
+ *   2、代理 computed[key] 到 vm 实例
+ *   3、判重，computed 中的 key 不能和 data、props 中的属性重复
+ * @param {*} computed = {
+ *   key1: function() { return xx },
+ *   key2: {
+ *     get: function() { return xx },
+ *     set: function(val) {}
+ *   }
+ * }
+ * 
+ */ 
 function initComputed (vm: Component, computed: Object) {
-  // $flow-disable-line
+  // 创建一个watchers
   const watchers = vm._computedWatchers = Object.create(null)
   // computed properties are just getters during SSR
   const isSSR = isServerRendering()
 
+  // 遍历computed
   for (const key in computed) {
     const userDef = computed[key]
+    // 获取 key 对应的值，即 getter 函数
     const getter = typeof userDef === 'function' ? userDef : userDef.get
     if (process.env.NODE_ENV !== 'production' && getter == null) {
       warn(
@@ -225,21 +254,23 @@ function initComputed (vm: Component, computed: Object) {
     }
 
     if (!isSSR) {
-      // create internal watcher for the computed property.
+      // 为computed 属性创建 watcher 实例
       watchers[key] = new Watcher(
         vm,
         getter || noop,
         noop,
+        // 配置项，computed 默认是懒执行
         computedWatcherOptions
       )
     }
 
-    // component-defined computed properties are already defined on the
-    // component prototype. We only need to define computed properties defined
-    // at instantiation here.
+    // 
     if (!(key in vm)) {
+      // 代理 computed 对象中的属性到 vm实例
+      // 这样就可以使用 vm.computedKey 访问计算属性了
       defineComputed(vm, key, userDef)
     } else if (process.env.NODE_ENV !== 'production') {
+      // 非生产环境有一个判重处理，computed 对象中的属性不能和 data、props 中的属性相同
       if (key in vm.$data) {
         warn(`The computed property "${key}" is already defined in data.`, vm)
       } else if (vm.$options.props && key in vm.$options.props) {
@@ -251,13 +282,19 @@ function initComputed (vm: Component, computed: Object) {
   }
 }
 
+
+/**
+ * 代理 computed 对象中的 key 到target(vm) 上
+ */
 export function defineComputed (
   target: any,
   key: string,
   userDef: Object | Function
 ) {
   const shouldCache = !isServerRendering()
+  // 构造属性描述符(get、set)
   if (typeof userDef === 'function') {
+    // shouldCache=false ,直接将userDef 给到sharedPropertyDefinition.get 作为get 的方法
     sharedPropertyDefinition.get = shouldCache
       ? createComputedGetter(key)
       : createGetterInvoker(userDef)
@@ -279,13 +316,30 @@ export function defineComputed (
       )
     }
   }
+  // 拦截对 target.key 的访问和设置
   Object.defineProperty(target, key, sharedPropertyDefinition)
 }
 
+
+// @returns 返回一个函数，这个函数在访问 vm.computedProperty 时会被执行，然后返回执行结果
 function createComputedGetter (key) {
+  // computed 属性值会缓存的原理也是在这里结合 watcher.dirty、watcher.evalaute、watcher.update 实现的
   return function computedGetter () {
+     // 得到当前 key 对应的 watcher
     const watcher = this._computedWatchers && this._computedWatchers[key]
     if (watcher) {
+       // 计算 key 对应的值，通过执行 computed.key 的回调函数来得到
+      // watcher.dirty 属性就是大家常说的 computed 计算结果会缓存的原理
+      // <template>
+      //   <div>{{ computedProperty }}</div>
+      //   <div>{{ computedProperty }}</div>
+      // </template>
+      // 像这种情况下，在页面的一次渲染中，两个 dom 中的 computedProperty 只有第一个
+      // 会执行 computed.computedProperty 的回调函数计算实际的值，
+      // 即执行 watcher.evalaute，而第二个就不走计算过程了，
+      // 因为上一次执行 watcher.evalute 时把 watcher.dirty 置为了 false，
+      // 待页面更新后，wathcer.update 方法会将 watcher.dirty 重新置为 true，
+      // 供下次页面更新时重新计算 computed.key 的结果
       if (watcher.dirty) {
         watcher.evaluate()
       }
@@ -345,10 +399,35 @@ function initMethods (vm: Component, methods: Object) {
   }
 }
 
+
+/**
+ * 处理 watch 对象的入口，做了两件事：
+ *   1、遍历 watch 对象
+ *   2、调用 createWatcher 函数
+ * @param {*} watch = {
+ *   'key1': function(val, oldVal) {},
+ *   'key2': 'this.methodName',
+ *   'key3': {
+ *     handler: function(val, oldVal) {},
+ *     deep: true
+ *   },
+ *   'key4': [
+ *     'this.methodNanme',
+ *     function handler1() {},
+ *     {
+ *       handler: function() {},
+ *       immediate: true
+ *     }
+ *   ],
+ *   'key.key5' { ... }
+ * }
+ */
 function initWatch (vm: Component, watch: Object) {
+  // 遍历watch 对象
   for (const key in watch) {
     const handler = watch[key]
     if (Array.isArray(handler)) {
+      // handler 为数组，遍历数组，获取其中的每一项，然后调用 createWatcher
       for (let i = 0; i < handler.length; i++) {
         createWatcher(vm, key, handler[i])
       }
@@ -358,21 +437,30 @@ function initWatch (vm: Component, watch: Object) {
   }
 }
 
+/**
+ * 两件事：
+ *   1、兼容性处理，保证 handler 肯定是一个函数
+ *   2、调用 $watch 
+ * @returns 
+ */
 function createWatcher (
   vm: Component,
   expOrFn: string | Function,
   handler: any,
   options?: Object
 ) {
+   // 如果 handler 为对象，则获取其中的 handler 选项的值
   if (isPlainObject(handler)) {
     options = handler
     handler = handler.handler
   }
+   // 如果 hander 为字符串，则说明是一个 methods 方法，获取 vm[handler]
   if (typeof handler === 'string') {
     handler = vm[handler]
   }
   return vm.$watch(expOrFn, handler, options)
 }
+
 
 export function stateMixin (Vue: Class<Component>) {
   // flow somehow has problems with directly declared definition object
@@ -400,24 +488,41 @@ export function stateMixin (Vue: Class<Component>) {
   Vue.prototype.$set = set
   Vue.prototype.$delete = del
 
+  /**
+ * 创建 watcher，返回 unwatch，共完成如下 5 件事：
+ *   1、兼容性处理，保证最后 new Watcher 时的 cb 为函数
+ *   2、标示用户 watcher
+ *   3、创建 watcher 实例
+ *   4、如果设置了 immediate，则立即执行一次 cb
+ *   5、返回 unwatch
+ * @param {*} expOrFn key
+ * @param {*} cb 回调函数
+ * @param {*} options 配置项，用户直接调用 this.$watch 时可能会传递一个 配置项
+ * @returns 返回 unwatch 函数，用于取消 watch 监听
+ */
   Vue.prototype.$watch = function (
     expOrFn: string | Function,
     cb: any,
     options?: Object
   ): Function {
     const vm: Component = this
+    // 兼容性处理，因为用户调用 vm.$watch 时设置的 cb 可能是对象
     if (isPlainObject(cb)) {
       return createWatcher(vm, expOrFn, cb, options)
     }
+     // options.user 表示用户 watcher，还有渲染 watcher，即 updateComponent 方法中实例化的 watcher
     options = options || {}
     options.user = true
+    // 创建 watcher
     const watcher = new Watcher(vm, expOrFn, cb, options)
+    // 如果用户设置了 immediate 为 true，则立即执行一次回调函数
     if (options.immediate) {
       const info = `callback for immediate watcher "${watcher.expression}"`
       pushTarget()
       invokeWithErrorHandling(cb, vm, [watcher.value], vm, info)
       popTarget()
     }
+    // 返回一个 unwatch 函数，用于解除监听
     return function unwatchFn () {
       watcher.teardown()
     }
