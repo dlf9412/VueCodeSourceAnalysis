@@ -179,6 +179,7 @@ export default class Watcher {
    */
   update () {
     /* istanbul ignore else */
+    // watcher 的lazy一直是true ，改变的是dirty 的值
     if (this.lazy) {
       // 懒执行时走这里，比如 computed
        // 将 dirty 置为 true，可以让 computedGetter 执行时重新计算 computed 回调函数的执行结果

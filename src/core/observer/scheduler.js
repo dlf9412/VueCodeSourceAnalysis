@@ -164,12 +164,16 @@ function callActivatedHooks (queue) {
 export function queueWatcher (watcher: Watcher) {
   const id = watcher.id
   if (has[id] == null) {
+    // 缓存这个watcher id
     has[id] = true
+    // 第一次进来 flushing=false，判断队列是否已经开始执行
     if (!flushing) {
+      // 未执行，直接将watcher 放入queue 队尾
       queue.push(watcher)
     } else {
       // if already flushing, splice the watcher based on its id
       // if already past its id, it will be run next immediately.
+      // 已经开始执行
       let i = queue.length - 1
       while (i > index && queue[i].id > watcher.id) {
         i--
