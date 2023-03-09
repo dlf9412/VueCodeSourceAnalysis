@@ -54,7 +54,7 @@ export class Observer {
     if (Array.isArray(value)) {
       /**
        * hasProto = '__proto__' in {}
-       *  判断对象是否存在_proto_属性，通过obj._proto_可以访问对象的原型链
+       *  作用是是为了兼容低级浏览器，如果低级浏览器 没有 _proto_ 则采用第二种方式
        */
       if (hasProto) {
         // value._proto_= arrayMethods,将value的原型指向 Array.prototype
