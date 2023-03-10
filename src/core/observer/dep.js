@@ -30,7 +30,7 @@ export default class Dep {
     remove(this.subs, sub)
   }
 
-  // 向watcher中添加dep
+  // 向watcher中添加Dep
   depend () {
     if (Dep.target) {
       Dep.target.addDep(this)

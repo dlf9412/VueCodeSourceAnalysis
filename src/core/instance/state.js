@@ -51,7 +51,6 @@ export function initState (vm: Component) {
   vm._watchers = []
   const opts = vm.$options
   // 处理props对象，为props对象的每个属性设置响应式，并将其代理到vm实例上
-  // shouldObserve = true
   if (opts.props) initProps(vm, opts.props)
   // 
   /**
@@ -69,8 +68,17 @@ export function initState (vm: Component) {
   } else {
     observe(vm._data = {}, true /* asRootData */)
   }
-  // 
+  /**
+   * 1、遍历computed，为当前computed创建watcher，默认懒执行。lazy=true
+   * 2、代理computed[key] 到vm实例
+   * 3、判重，不能和data,props中的属性重复
+   * */ 
   if (opts.computed) initComputed(vm, opts.computed)
+  /**
+   * 1、处理watch对象
+   * 2、为每个 watch.key 创建watcher实例，key 和 watcher 实例可能是 一对多的关系
+   * 3、如果设置了immediate，则立即执行回调函数
+   */
   if (opts.watch && opts.watch !== nativeWatch) {
     initWatch(vm, opts.watch)
   }
@@ -184,7 +192,7 @@ function initData (vm: Component) {
       proxy(vm, `_data`, key)
     }
   }
-  // 数据观测,响应式处理
+  // 响应式处理
   observe(data, true /* asRootData */)
 }
 
@@ -344,10 +352,13 @@ function initMethods (vm: Component, methods: Object) {
     vm[key] = typeof methods[key] !== 'function' ? noop : bind(methods[key], vm)
   }
 }
-
+// 
 function initWatch (vm: Component, watch: Object) {
+  // 遍历watch
   for (const key in watch) {
+    // 获取watch的方法
     const handler = watch[key]
+    // 如果是数组，则遍历数组
     if (Array.isArray(handler)) {
       for (let i = 0; i < handler.length; i++) {
         createWatcher(vm, key, handler[i])

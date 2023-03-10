@@ -100,6 +100,7 @@ export default class Watcher {
    * Evaluate the getter, and re-collect dependencies.
    */
   get () {
+    // Dep.target=this（watcher）
     pushTarget(this)
     let value
     const vm = this.vm
@@ -128,9 +129,11 @@ export default class Watcher {
    */
   addDep (dep: Dep) {
     const id = dep.id
+    // 判断 dep没有被添加过
     if (!this.newDepIds.has(id)) {
       this.newDepIds.add(id)
       this.newDeps.push(dep)
+      // 向dep中添加watcher，双向存储
       if (!this.depIds.has(id)) {
         dep.addSub(this)
       }
