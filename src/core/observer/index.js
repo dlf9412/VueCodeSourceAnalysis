@@ -133,7 +133,7 @@ export function observe (value: any, asRootData: ?boolean): Observer | void {
     ob = value.__ob__
 
   } else if (shouldObserve &&!isServerRendering() &&(Array.isArray(value) || isPlainObject(value)) && Object.isExtensibl(value) &&!value._isVue) {
-    // 创建观察者实例
+    //为当前 vm 的data 创建观察者实例
     ob = new Observer(value)
   }
   if (asRootData && ob) {
@@ -215,6 +215,7 @@ export function defineReactive (
       if (newVal === value || (newVal !== newVal && value !== value)) {
         return
       }
+      
       /* eslint-enable no-self-compare */
       if (process.env.NODE_ENV !== 'production' && customSetter) {
         customSetter()
