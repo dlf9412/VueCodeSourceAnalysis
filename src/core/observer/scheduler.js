@@ -66,10 +66,12 @@ if (inBrowser && !isIE) {
 }
 
 /**
- * Flush both queues and run the watchers.
+ * 开始执行queue 数组中的watcher
  */
 function flushSchedulerQueue () {
+  // 获取时间戳
   currentFlushTimestamp = getNow()
+  // 将flush 置为true， 告知后续进来的watcher，已经开始执行了
   flushing = true
   let watcher, id
 
@@ -81,17 +83,22 @@ function flushSchedulerQueue () {
   //    user watchers are created before the render watcher)
   // 3. If a component is destroyed during a parent component's watcher run,
   //    its watchers can be skipped.
+  // 根据id进行排序
   queue.sort((a, b) => a.id - b.id)
 
   // do not cache length because more watchers might be pushed
   // as we run existing watchers
+  // 遍历queue 队列
   for (index = 0; index < queue.length; index++) {
+    // 取出watcher
     watcher = queue[index]
     if (watcher.before) {
       watcher.before()
     }
     id = watcher.id
+    // 重置has中对应的watcher
     has[id] = null
+    // 调用watcher 的run 方法
     watcher.run()
     // in dev build, check and stop circular updates.
     if (process.env.NODE_ENV !== 'production' && has[id] != null) {
@@ -162,18 +169,22 @@ function callActivatedHooks (queue) {
  * pushed when the queue is being flushed.
  */
 export function queueWatcher (watcher: Watcher) {
+  // 获取watcher.id
   const id = watcher.id
+  // 如果 watcher 已经存在，则跳过，不会重复入队
   if (has[id] == null) {
     // 缓存这个watcher id
     has[id] = true
-    // 第一次进来 flushing=false，判断队列是否已经开始执行
+    // 第一次进来 flushing=false
+    // 判断队列是否已经开始执行
     if (!flushing) {
       // 未执行，直接将watcher 放入queue 队尾
       queue.push(watcher)
     } else {
-      // if already flushing, splice the watcher based on its id
-      // if already past its id, it will be run next immediately.
+
       // 已经开始执行
+      // 从队列末尾开始倒序遍历，更具当前watcher.id 找到它大于的watcher.id 的位置，然后将自己插入到该位置之后的下一个位置
+      // 即将当前watcher 放入已经排序的队列中，且队列仍然是有序的
       let i = queue.length - 1
       while (i > index && queue[i].id > watcher.id) {
         i--
@@ -183,7 +194,7 @@ export function queueWatcher (watcher: Watcher) {
     // queue the flush
     if (!waiting) {
       waiting = true
-
+      // 直接刷新调度队列
       if (process.env.NODE_ENV !== 'production' && !config.async) {
         flushSchedulerQueue()
         return

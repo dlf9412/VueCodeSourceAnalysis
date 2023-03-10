@@ -29,12 +29,6 @@ export function toggleObserving (value: boolean) {
 }
 
 /**
- * Observer class that is attached to each observed
- * object. Once attached, the observer converts the target
- * object's property keys into getter/setters that
- * collect dependencies and dispatch updates.
- */
-/**
  * 观察者类，会被附加到每个被观察的对象上，value._ob_=this
  * 而对象的各个属性则会被转换成getter/setter，并收集依赖和通知更新
  */
@@ -45,28 +39,26 @@ export class Observer {
 
   constructor (value: any) {
     this.value = value
-    // 实例化一个dep
+    // 实例化一个dep 
     this.dep = new Dep()
     this.vmCount = 0
     // 在value对象上设置_ob_属性
     def(value, '__ob__', this)
-    // 判断value是否为数组
+    // 判断value是否为数组, 数组和对象采用不同的处理方式
     if (Array.isArray(value)) {
-      /**
-       * hasProto = '__proto__' in {}
-       *  作用是是为了兼容低级浏览器，如果低级浏览器 没有 _proto_ 则采用第二种方式
-       */
+      // hasProto = '__proto__' in {}
+      // 这个判断的作用是是为了兼容低级浏览器，如果低级浏览器 没有 _proto_(如ie6-10) 则采用第二种方式
       if (hasProto) {
         // value._proto_= arrayMethods,将value的原型指向 Array.prototype
         protoAugment(value, arrayMethods)
       } else {
-        // 赋值Array.prototype 的 getOwnPropertyNames 中的方法 到value上
-        // 也就是 数组的 七个方法到value上
+        // 在目标对象上定义指定属性,为目标 设置指定属性(数组的七个方法) 
         copyAugment(value, arrayMethods, arrayKeys)
       }
+      // 遍历数组,为数组的每一项设置观察
       this.observeArray(value)
     } else {
-      // value为对象，为对象中的每个值设置响应式
+      // value为对象，为对象中的每个值设置 拦截
       this.walk(value)
     }
   }
@@ -117,7 +109,7 @@ function copyAugment (target: Object, src: Object, keys: Array<string>) {
 }
 
 /**
- * data响应式处理的真正入口
+ * data响应式处理的入口
  * 为对象创建观察者实例，如果对象已经被观察过，则返回已有的观察者实例，否则创建新的观察者实例
  *  
  */ 
@@ -143,10 +135,9 @@ export function observe (value: any, asRootData: ?boolean): Observer | void {
 }
 
 /**
- * 拦截 obj[key]的读取和设置操作
- * 1、在第一次读取时收集依赖，比如执行render 函数生成虚拟dom时会有读取操作
+ * 拦截 obj[key]的读取和设置操作--依赖收集,依赖更新
+ * 1、在第一次读取时收集依赖，比如computed使用了data的数据,会有读取操作
  * 2、在更新时设置新值并通知依赖更新
- * Define a reactive property on an Object.
  */
 export function defineReactive (
   obj: Object,
@@ -180,15 +171,10 @@ export function defineReactive (
     // get 拦截对 obj[key] 的读取操作---依赖收集
     get: function reactiveGetter () {
       const value = getter ? getter.call(obj) : val
-      /**
-       * 
-       * Dep.target为 Dep 类的一个静态属性，值为watcher，在实例化 Watcher 时会被设置
-       * 实例化Watcher 时会执行 new Watcher 时传递的回调函数(computed 除外，因为它懒执行)
-       * 而回调函数中如果有 vm.key 的读取行为，则会触发这里的 读取 拦截，进行依赖收集
-       * 回调函数执行完以后又会将 Dep.target设置为null，避免这里重复收集依赖
-       * 
-       */ 
-
+      // Dep.target为 Dep 类的一个静态属性，值为watcher,在实例化 Watcher 时会被设置
+      // 实例化Watcher 时会执行 new Watcher 时传递的回调函数(computed 除外，因为它懒执行)
+      // 而回调函数中如果有 vm.key 的读取行为，则会触发这里的 读取 拦截，进行依赖收集
+      // 回调函数执行完以后又会将 Dep.target设置为null，避免这里重复收集依赖
       if (Dep.target) {
         // 依赖收集，在 dep 中添加 watcher，也在 watcher 中添加 dep
         dep.depend()
