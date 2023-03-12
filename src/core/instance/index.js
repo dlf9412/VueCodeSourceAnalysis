@@ -16,7 +16,7 @@ function Vue (options) {
 
 // _init方法,初始化data/props/methods/computed/watch/provide/inject等
 initMixin(Vue)
-// $set/$delete
+// 将$set/$delete/$data/$props 挂载到vm实例，可以通过this.$data的方式获取到
 stateMixin(Vue)
 // 事件:$on,$emit,$once,$off
 eventsMixin(Vue)

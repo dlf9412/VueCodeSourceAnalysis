@@ -42,9 +42,7 @@ export default class Dep {
     // stabilize the subscriber list first
     const subs = this.subs.slice()
     if (process.env.NODE_ENV !== 'production' && !config.async) {
-      // subs aren't sorted in scheduler if not running async
-      // we need to sort them now to make sure they fire in correct
-      // order
+      // 排序
       subs.sort((a, b) => a.id - b.id)
     }
     // 遍历dep 中存储的 watcher，执行 watcher.update()

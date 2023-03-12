@@ -74,20 +74,10 @@ function flushSchedulerQueue () {
   // 将flush 置为true， 告知后续进来的watcher，已经开始执行了
   flushing = true
   let watcher, id
-
-  // Sort queue before flush.
-  // This ensures that:
-  // 1. Components are updated from parent to child. (because parent is always
-  //    created before the child)
-  // 2. A component's user watchers are run before its render watcher (because
-  //    user watchers are created before the render watcher)
-  // 3. If a component is destroyed during a parent component's watcher run,
-  //    its watchers can be skipped.
+  // 刷新前排序队列.
   // 根据id进行排序
   queue.sort((a, b) => a.id - b.id)
-
-  // do not cache length because more watchers might be pushed
-  // as we run existing watchers
+  // 不要缓存长度，因为当我们运行现有的观察者时，可能会推送更多的观察者
   // 遍历queue 队列
   for (index = 0; index < queue.length; index++) {
     // 取出watcher
@@ -120,10 +110,11 @@ function flushSchedulerQueue () {
   // keep copies of post queues before resetting state
   const activatedQueue = activatedChildren.slice()
   const updatedQueue = queue.slice()
-
+  // 重置属性值waiting/flushing
   resetSchedulerState()
 
   // call component updated and activated hooks
+  // 触发对应的watcher实例上的vm 的钩子函数(updated/activated)
   callActivatedHooks(activatedQueue)
   callUpdatedHooks(updatedQueue)
 
@@ -181,7 +172,6 @@ export function queueWatcher (watcher: Watcher) {
       // 未执行，直接将watcher 放入queue 队尾
       queue.push(watcher)
     } else {
-
       // 已经开始执行
       // 从队列末尾开始倒序遍历，更具当前watcher.id 找到它大于的watcher.id 的位置，然后将自己插入到该位置之后的下一个位置
       // 即将当前watcher 放入已经排序的队列中，且队列仍然是有序的
