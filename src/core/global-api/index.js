@@ -40,18 +40,22 @@ export function initGlobalAPI (Vue: GlobalAPI) {
     mergeOptions,
     defineReactive
   }
-
+  //Vue.set方法
   Vue.set = set
+  // Vue.delete方法
   Vue.delete = del
+  // Vue.nextTick方法
   Vue.nextTick = nextTick
 
-  // 2.6 explicit observable API
+  // Vue.observable方法
   Vue.observable = <T>(obj: T): T => {
     observe(obj)
     return obj
   }
 
   Vue.options = Object.create(null)
+  //ASSET_TYPES = ['component','directive','filter']
+  //在vue.options中创建对应的components,directives,filters属性值
   ASSET_TYPES.forEach(type => {
     Vue.options[type + 's'] = Object.create(null)
   })
@@ -61,9 +65,12 @@ export function initGlobalAPI (Vue: GlobalAPI) {
   Vue.options._base = Vue
 
   extend(Vue.options.components, builtInComponents)
-
+  //Vue.use方法
   initUse(Vue)
+  //Vue.mixin方法
   initMixin(Vue)
+  //Vue.extend方法
   initExtend(Vue)
+  //Vue[component/directive/filter]方法
   initAssetRegisters(Vue)
 }

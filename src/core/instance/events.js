@@ -51,16 +51,21 @@ export function updateComponentListeners (
 
 export function eventsMixin (Vue: Class<Component>) {
   const hookRE = /^hook:/
+  // 监听当前实例上的自定义事件
   Vue.prototype.$on = function (event: string | Array<string>, fn: Function): Component {
     const vm: Component = this
+    // 判断event 是否为数组
     if (Array.isArray(event)) {
+      // 数组，遍历，为里面每一个值进行
       for (let i = 0, l = event.length; i < l; i++) {
         vm.$on(event[i], fn)
       }
     } else {
+      // 给events 对应的event中推入方法，支持一对多
       (vm._events[event] || (vm._events[event] = [])).push(fn)
       // optimize hook:event cost by using a boolean flag marked at registration
       // instead of a hash lookup
+      // 判断是否设置了hookEvent
       if (hookRE.test(event)) {
         vm._hasHookEvent = true
       }
@@ -68,6 +73,7 @@ export function eventsMixin (Vue: Class<Component>) {
     return vm
   }
 
+  // 监听一个自定义事件，但是只触发一次。一旦触发之后，监听器就会被移除。
   Vue.prototype.$once = function (event: string, fn: Function): Component {
     const vm: Component = this
     function on () {
@@ -79,6 +85,12 @@ export function eventsMixin (Vue: Class<Component>) {
     return vm
   }
 
+  /**
+   * 移除自定义事件监听器
+   * 如果没有提供参数，则移除所有的事件监听器；
+   * 如果只提供了事件，则移除该事件所有的监听器；
+   * 如果同时提供了事件与回调，则只移除这个回调的监听器。
+   */
   Vue.prototype.$off = function (event?: string | Array<string>, fn?: Function): Component {
     const vm: Component = this
     // all
@@ -115,6 +127,7 @@ export function eventsMixin (Vue: Class<Component>) {
     return vm
   }
 
+  // 触发当前实例上的事件。附加参数都会传给监听器回调
   Vue.prototype.$emit = function (event: string): Component {
     const vm: Component = this
     if (process.env.NODE_ENV !== 'production') {
