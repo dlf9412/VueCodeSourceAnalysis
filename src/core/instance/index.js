@@ -32,7 +32,7 @@ stateMixin(Vue)
 eventsMixin(Vue)
 /**
  * 
- * 生命周期相关:$forceUpdte,$destory
+ * 生命周期相关:_update，$forceUpdte,$destory
  */
 lifecycleMixin(Vue)
 /**

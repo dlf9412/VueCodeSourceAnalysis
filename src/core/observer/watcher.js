@@ -50,6 +50,7 @@ export default class Watcher {
     isRenderWatcher?: boolean
   ) {
     this.vm = vm
+    // 实例watcher(区分实例创建的watcher还是属性创建的watcher)
     if (isRenderWatcher) {
       vm._watcher = this
     }
