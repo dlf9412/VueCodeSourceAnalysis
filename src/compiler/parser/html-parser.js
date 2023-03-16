@@ -51,42 +51,59 @@ function decodeAttr (value, shouldDecodeNewlines) {
   return value.replace(re, match => decodingMap[match])
 }
 
+//通过循环遍历html 模板字符串，依次处理其中的各个标签，以及标签上的属性
 export function parseHTML (html, options) {
   const stack = []
   const expectHTML = options.expectHTML
+  // 是否是自闭合标签
   const isUnaryTag = options.isUnaryTag || no
+  // 是否可以只有开始标签
   const canBeLeftOpenTag = options.canBeLeftOpenTag || no
+  // 记录当前在原始html 字符串中的开始位置
   let index = 0
   let last, lastTag
   while (html) {
     last = html
-    // Make sure we're not in a plaintext content element like script/style
+    // 确保不是 在 script、style、textarea 这样的纯文本元素中
     if (!lastTag || !isPlainTextElement(lastTag)) {
+      // 找到第一个< 字符
       let textEnd = html.indexOf('<')
+      // textEnd===0 说明在开头找到了
+      // 分别处理可能找到的注释标签，条件注释标签，Doctype、开始标签、结束标签
+      // 每处理完一种情况，就会截断(continue)循环，并且重置html 字符串，将处理过的标签截掉，下一次循环处理剩余的html
       if (textEnd === 0) {
         // Comment:
+        // 处理注释标签<!-- xx -->
         if (comment.test(html)) {
+          // 注释标签的结束索引
           const commentEnd = html.indexOf('-->')
 
           if (commentEnd >= 0) {
+            // 是否应该保留 注释
             if (options.shouldKeepComment) {
+              // 注释内容，注释的开始索引、结束索引
               options.comment(html.substring(4, commentEnd), index, index + commentEnd + 3)
             }
+            //调整 html 和 index变量 
             advance(commentEnd + 3)
             continue
           }
         }
 
+        // 处理条件注释标签 ：<!-- [if IE]>
         // http://en.wikipedia.org/wiki/Conditional_comment#Downlevel-revealed_conditional_comment
         if (conditionalComment.test(html)) {
+          // 找到结束位置
           const conditionalEnd = html.indexOf(']>')
 
           if (conditionalEnd >= 0) {
+            // 调整html和index 变量
             advance(conditionalEnd + 2)
             continue
           }
         }
 
+        // 处理Doctype，<!DOCTYPE html>
         // Doctype:
         const doctypeMatch = html.match(doctype)
         if (doctypeMatch) {
@@ -94,18 +111,26 @@ export function parseHTML (html, options) {
           continue
         }
 
-        // End tag:
+        /**
+         * 处理开始标签和结束标签 是这整个函数中的核心部分，其他的不用管
+         * 这两个部分局势在构造element ast
+         */
+        // 处理标签结束 比如 </div>
         const endTagMatch = html.match(endTag)
         if (endTagMatch) {
           const curIndex = index
           advance(endTagMatch[0].length)
+          // 处理结束标签
           parseEndTag(endTagMatch[1], curIndex, index)
           continue
         }
 
         // Start tag:
+        // 处理开始标签，比如<div id='app'> startTagMatch = { tagName: 'div', attrs: [[xx], ...], start: index }
         const startTagMatch = parseStartTag()
         if (startTagMatch) {
+          // 进一步处理上一步得到结果，并最后调用options.start 方法
+          // 真正的解析工作都是在这个start 方法中做的
           handleStartTag(startTagMatch)
           if (shouldIgnoreFirstNewline(startTagMatch.tagName, html)) {
             advance(1)
