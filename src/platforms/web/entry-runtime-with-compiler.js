@@ -22,7 +22,7 @@ Vue.prototype.$mount = function (
   el?: string | Element,
   hydrating?: boolean
 ): Component {
-  // 挂载点
+  // 获取挂载的dom
   el = el && query(el)
 
   // 挂载点不能是body 或者 html
