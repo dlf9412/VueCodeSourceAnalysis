@@ -17,7 +17,9 @@ export function createCompilerCreator (baseCompile: Function): Function {
      * @returns 
      */
     function compile (
+      // 模板字符串
       template: string,
+      // 编译选项
       options?: CompilerOptions
     ): CompiledResult {
       // 以平台特有的编译配置为原型，创建编译选项对象
@@ -30,6 +32,7 @@ export function createCompilerCreator (baseCompile: Function): Function {
         (tip ? tips : errors).push(msg)
       }
 
+      // 如果存在配置项，则将配置项合并到finalOptions平台基础配置项中
       if (options) {
         if (process.env.NODE_ENV !== 'production' && options.outputSourceRange) {
           // $flow-disable-line
