@@ -72,7 +72,7 @@ export function parseHTML (html, options) {
       // 分别处理可能找到的注释标签，条件注释标签，Doctype、开始标签、结束标签
       // 每处理完一种情况，就会截断(continue)循环，并且重置html 字符串，将处理过的标签截掉，下一次循环处理剩余的html
       if (textEnd === 0) {
-        // Comment:
+        // comment = /^<!\--/
         // 处理注释标签<!-- xx -->
         if (comment.test(html)) {
           // 注释标签的结束索引

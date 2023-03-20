@@ -94,7 +94,9 @@ export function createCompileToFunctionFn (compile: Function): Function {
     // 转换编译得到的字符串代码为函数，通过new Function(code)实现
     const res = {}
     const fnGenErrors = []
+    // 处理render 配置项变为render 函数
     res.render = createFunction(compiled.render, fnGenErrors)
+    // 将静态节点的函数字符串转换成可执行函数
     res.staticRenderFns = compiled.staticRenderFns.map(code => {
       return createFunction(code, fnGenErrors)
     })

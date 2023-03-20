@@ -113,14 +113,16 @@ export function parse (
     !(el.attrsMap.is ? isReservedTag(el.attrsMap.is) : isReservedTag(el.tag))
   )
   // 分别获取options.module 下的class,model,style三个模块中的transformNode,preTransformNode,postTransformNode方法
+  // 获取到的数据最终为各个模块下的transformNode/preTransformNode/postTransformNode方法组成的数组  如：[klass.transformNode,style.transformNode]
   // 负责 处理元素节点上的class、style、v-model
-  transforms = pluckModuleFunction(options.modules, 'transformNode')
-  preTransforms = pluckModuleFunction(options.modules, 'preTransformNode')
+  transforms = pluckModuleFunction(options.modules, 'transformNode') 
+  preTransforms = pluckModuleFunction(options.modules, 'preTransformNode') 
   postTransforms = pluckModuleFunction(options.modules, 'postTransformNode')
 
   // 界定符，比如：{{}}
   delimiters = options.delimiters
 
+  // 解析的中间结果都放在这里
   const stack = []
   // 空格选项
   const preserveWhitespace = options.preserveWhitespace !== false

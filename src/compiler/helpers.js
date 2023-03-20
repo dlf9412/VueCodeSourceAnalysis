@@ -15,6 +15,7 @@ export function pluckModuleFunction<F: Function> (
   modules: ?Array<Object>,
   key: string
 ): Array<F> {
+  // modules.map(m => m[key]).filter(_ => _)  遍历 将所有modules 的 m=m[key],然后再通过filter 过滤掉无用的数据，比如undefined
   return modules
     ? modules.map(m => m[key]).filter(_ => _)
     : []
