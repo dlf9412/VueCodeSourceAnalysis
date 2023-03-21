@@ -40,12 +40,25 @@ export type CodegenResult = {
   staticRenderFns: Array<string>
 };
 
+/**
+ * 从 AST 生成渲染函数
+ * @param {*} ast 
+ * @param {*} options 
+ * @returns 
+ */
 export function generate (
   ast: ASTElement | void,
   options: CompilerOptions
 ): CodegenResult {
+  // 实例化 CodegenState 对象，生成代码的时候需要用到其中的一些东西
   const state = new CodegenState(options)
-  // fix #11483, Root level <script> tags should not be rendered.
+  // 生成字符串格式的代码，比如：'_c(tag,data,children,normalizationType)'
+  // data 为节点上的属性组件 JSON 字符串，比如：'{key:xx,ref:xx,...}'
+  // children 为所有子节点的字符串格式的代码组成的字符串数组，格式：
+  //     `['_c(tag, data, children)', ...],normalizationType`，
+  //     最后的 normalization 是 _c 的第四个参数，
+  //     表示节点的规范化类型，不是重点，不需要关注
+  // 当然 code 并不一定就是 _c，也有可能是其它的，比如整个组件都是静态的，则结果就为 _m(0)
   const code = ast ? (ast.tag === 'script' ? 'null' : genElement(ast, state)) : '_c("div")'
   return {
     render: `with(this){return ${code}}`,
@@ -53,41 +66,84 @@ export function generate (
   }
 }
 
+// 
 export function genElement (el: ASTElement, state: CodegenState): string {
   if (el.parent) {
     el.pre = el.pre || el.parent.pre
   }
 
   if (el.staticRoot && !el.staticProcessed) {
+    /**
+     * 处理静态根节点，生成节点的渲染函数
+     * 1、将当前静态节点的渲染函数放到 staticRenderFns 数组中
+     * 2、返回一个可执行 函数 _m(idx,true or '')
+     * */
     return genStatic(el, state)
   } else if (el.once && !el.onceProcessed) {
+    /**
+     * 处理带有v-once 指令的节点，结果会有三种：
+     * 1、当前节点存在v-if 指令，得到一个三元表达式,condition?render1:render2
+     * 2、当前节点是一个包含在v-for指令内部的静态节点，得到'_o(_c(tag,data,children),number,key)'
+     * 3、当前节点就是一个单独的v-once 节点，得到 '_m(idx,true of '')'
+     */
     return genOnce(el, state)
   } else if (el.for && !el.forProcessed) {
+    /**
+     *  处理节点上的v-for 指令
+     *  得到 `_l(exp, function(alias, iterator1, iterator2){return _c(tag, data, children)})`
+     */
     return genFor(el, state)
   } else if (el.if && !el.ifProcessed) {
+    /**
+     * 处理带有 v-if 指令的节点，最终得到一个三元表达式：condition ? render1 : render2
+     */
     return genIf(el, state)
   } else if (el.tag === 'template' && !el.slotTarget && !state.pre) {
+    /**
+     * 当前节点不是 template 标签也不是插槽和带有 v-pre 指令的节点时走这里
+     * 生成所有子节点的渲染函数，返回一个数组，格式如：
+     * [_c(tag, data, children, normalizationType), ...] 
+     */
     return genChildren(el, state) || 'void 0'
   } else if (el.tag === 'slot') {
+    /**
+     * 生成插槽的渲染函数，得到
+     * _t(slotName, children, attrs, bind)
+     */
     return genSlot(el, state)
   } else {
-    // component or element
+    // 处理动态组件和普通元素（自定义组件、原生标签）
     let code
     if (el.component) {
+      /**
+       * 处理动态组件，生成动态组件的渲染函数
+       * 得到 `_c(compName, data, children)`
+       */
       code = genComponent(el.component, el, state)
     } else {
+       // 自定义组件和原生标签走这里
       let data
       if (!el.plain || (el.pre && state.maybeComponent(el))) {
+        // 非普通元素或者带有 v-pre 指令的组件走这里，处理节点的所有属性，返回一个 JSON 字符串，
+        // 比如 '{ key: xx, ref: xx, ... }'
         data = genData(el, state)
       }
 
+      // 处理子节点，得到所有子节点字符串格式的代码组成的数组，格式：
+      // `['_c(tag, data, children)', ...],normalizationType`，
+      // 最后的 normalization 表示节点的规范化类型，不是重点，不需要关注
       const children = el.inlineTemplate ? null : genChildren(el, state, true)
+      // 得到最终的字符串格式的代码，格式：
+      // '_c(tag, data, children, normalizationType)'
       code = `_c('${el.tag}'${
         data ? `,${data}` : '' // data
       }${
         children ? `,${children}` : '' // children
       })`
     }
+    // 如果提供了 transformCode 方法， 
+    // 则最终的 code 会经过各个模块（module）的该方法处理，
+    // 不过框架没提供这个方法，不过即使处理了，最终的格式也是 _c(tag, data, children)
     // module transforms
     for (let i = 0; i < state.transforms.length; i++) {
       code = state.transforms[i](el, code)
@@ -217,61 +273,83 @@ export function genFor (
     '})'
 }
 
+/**
+ * 处理节点上的众多属性，最后生成这些属性组成的 JSON 字符串，比如 data={key:xx,ref:xx}
+ */
 export function genData (el: ASTElement, state: CodegenState): string {
+  // 节点的属性组成的 JSON 字符串
   let data = '{'
 
+  // 首先先处理指令，因为指令可能在生成其它属性之前改变这些属性
+  // 执行指令编译方法，比如 web 平台的 v-text、v-html、v-model，然后在 el 对象上添加相应的属性，
+  // 比如 v-text： el.textContent = _s(value, dir)
+  //     v-html：el.innerHTML = _s(value, dir)
+  // 当指令在运行时还有任务时，比如 v-model，则返回 directives: [{ name, rawName, value, arg, modifiers }, ...}]
   // directives first.
   // directives may mutate the el's other properties before they are generated.
   const dirs = genDirectives(el, state)
   if (dirs) data += dirs + ','
 
-  // key
+  // key ，data = { key: xx }
   if (el.key) {
     data += `key:${el.key},`
   }
-  // ref
+  // ref，data = { ref: xx }
   if (el.ref) {
     data += `ref:${el.ref},`
   }
+  // ref 带有 ref 属性的节点在带有 v-for 指令的节点的内部， data = { refInFor: true }
   if (el.refInFor) {
     data += `refInFor:true,`
   }
-  // pre
+  // pre ，v-pre 指令，data = { pre: true }
   if (el.pre) {
     data += `pre:true,`
   }
+
+  // 动态组件，data = { tag: 'component' }
   // record original tag name for components using "is" attribute
   if (el.component) {
     data += `tag:"${el.tag}",`
   }
+  // 为节点执行模块(class、style)的 genData 方法，
+  // 得到 data = { staticClass: xx, class: xx, staticStyle: xx, style: xx }
   // module data generation functions
   for (let i = 0; i < state.dataGenFns.length; i++) {
     data += state.dataGenFns[i](el)
   }
+  // 其它属性，得到 data = { attrs: 静态属性字符串 } 或者 
+  // data = { attrs: '_d(静态属性字符串, 动态属性字符串)' }
   // attributes
   if (el.attrs) {
     data += `attrs:${genProps(el.attrs)},`
   }
-  // DOM props
+  // DOM props，结果同 el.attrs
   if (el.props) {
     data += `domProps:${genProps(el.props)},`
   }
+  // 自定义事件，data = { `on${eventName}:handleCode` } 或者 { `on_d(${eventName}:handleCode`, `${eventName},handleCode`) }
   // event handlers
   if (el.events) {
     data += `${genHandlers(el.events, false)},`
   }
+  // 带 .native 修饰符的事件，
+  // data = { `nativeOn${eventName}:handleCode` } 或者 { `nativeOn_d(${eventName}:handleCode`, `${eventName},handleCode`) }
   if (el.nativeEvents) {
     data += `${genHandlers(el.nativeEvents, true)},`
   }
+   // 非作用域插槽，得到 data = { slot: slotName }
   // slot target
   // only for non-scoped slots
   if (el.slotTarget && !el.slotScope) {
     data += `slot:${el.slotTarget},`
   }
-  // scoped slots
+  // scoped slots，作用域插槽，data = { scopedSlots: '_u(xxx)' }
   if (el.scopedSlots) {
     data += `${genScopedSlots(el, el.scopedSlots, state)},`
   }
+  // 处理 v-model 属性，得到
+  // data = { model: { value, callback, expression } }
   // component v-model
   if (el.model) {
     data += `model:{value:${
@@ -282,18 +360,21 @@ export function genData (el: ASTElement, state: CodegenState): string {
       el.model.expression
     }},`
   }
-  // inline-template
+  // inline-template，处理内联模版，得到
+  // data = { inlineTemplate: { render: function() { render 函数 }, staticRenderFns: [ function() {}, ... ] } }
   if (el.inlineTemplate) {
     const inlineTemplate = genInlineTemplate(el, state)
     if (inlineTemplate) {
       data += `${inlineTemplate},`
     }
   }
+  // 删掉 JSON 字符串最后的 逗号，然后加上闭合括号 }
   data = data.replace(/,$/, '') + '}'
   // v-bind dynamic argument wrap
   // v-bind with dynamic arguments must be applied using the same v-bind object
   // merge helper so that class/style/mustUseProp attrs are handled correctly.
   if (el.dynamicAttrs) {
+    // 存在动态属性，data = `_b(data, tag, 静态属性字符串或者_d(静态属性字符串, 动态属性字符串))`
     data = `_b(${data},"${el.tag}",${genProps(el.dynamicAttrs)})`
   }
   // v-bind data wrap
@@ -306,24 +387,35 @@ export function genData (el: ASTElement, state: CodegenState): string {
   }
   return data
 }
-
+/**
+ * 运行指令的编译方法，如果指令存在运行时任务，则返回 directives: [{ name, rawName, value, arg, modifiers }, ...}] 
+ */
 function genDirectives (el: ASTElement, state: CodegenState): string | void {
+  // 获取指令数组
   const dirs = el.directives
+  // 没有指令则直接结束
   if (!dirs) return
+  //  指令的处理结果
   let res = 'directives:['
+  // 标记，用于标记指令是否需要在运行时完成的任务，比如 v-model 的 input 事件
   let hasRuntime = false
   let i, l, dir, needRuntime
+  // 遍历指令数组
   for (i = 0, l = dirs.length; i < l; i++) {
     dir = dirs[i]
     needRuntime = true
+    // 获取节点当前指令的处理方法，比如 web 平台的 v-html、v-text、v-model
     const gen: DirectiveFunction = state.directives[dir.name]
     if (gen) {
+      // 执行指令的编译方法，如果指令还需要运行时完成一部分任务，则返回 true，比如 v-model
       // compile-time directive that manipulates AST.
       // returns true if it also needs a runtime counterpart.
       needRuntime = !!gen(el, dir, state.warn)
     }
     if (needRuntime) {
+      // 表示该指令在运行时还有任务
       hasRuntime = true
+       // res = directives:[{ name, rawName, value, arg, modifiers }, ...]
       res += `{name:"${dir.name}",rawName:"${dir.rawName}"${
         dir.value ? `,value:(${dir.value}),expression:${JSON.stringify(dir.value)}` : ''
       }${
@@ -334,6 +426,7 @@ function genDirectives (el: ASTElement, state: CodegenState): string | void {
     }
   }
   if (hasRuntime) {
+    // 也就是说，只有指令存在运行时任务时，才会返回 res
     return res.slice(0, -1) + ']'
   }
 }
@@ -461,6 +554,10 @@ function genScopedSlot (
   return `{key:${el.slotTarget || `"default"`},fn:${fn}${reverseProxy}}`
 }
 
+/**
+ * 生成所有子节点的渲染函数，返回一个数组，格式如：
+ * [_c(tag, data, children, normalizationType), ...] 
+ */
 export function genChildren (
   el: ASTElement,
   state: CodegenState,
@@ -468,8 +565,10 @@ export function genChildren (
   altGenElement?: Function,
   altGenNode?: Function
 ): string | void {
+  // 所有子节点
   const children = el.children
   if (children.length) {
+    // 第一个子节点
     const el: any = children[0]
     // optimize single v-for
     if (children.length === 1 &&
@@ -477,15 +576,21 @@ export function genChildren (
       el.tag !== 'template' &&
       el.tag !== 'slot'
     ) {
+      // 优化，只有一个子节点 && 子节点上有v-for 指令 && 子节点的标签不为template 或者slot
+      // 优化的方式是直接调用genElement 生成该节点的渲染函数，不需要走下面的循环然后调用 genCode 最后得到渲染函数
       const normalizationType = checkSkip
         ? state.maybeComponent(el) ? `,1` : `,0`
         : ``
       return `${(altGenElement || genElement)(el, state)}${normalizationType}`
     }
+    // 获取节点规范化类型，返回一个number 0、1、2 不是重点，不重要
     const normalizationType = checkSkip
       ? getNormalizationType(children, state.maybeComponent)
       : 0
+      // 函数，生成代码的一个函数
     const gen = altGenNode || genNode
+    // 返回一个数据，数组的每个元素都是一个子节点的函数渲染
+    // 格式：['_c(tag, data, children, normalizationType)', ...]
     return `[${children.map(c => gen(c, state)).join(',')}]${
       normalizationType ? `,${normalizationType}` : ''
     }`
@@ -580,8 +685,15 @@ function genComponent (
     children ? `,${children}` : ''
   })`
 }
-
+/**
+ * 遍历属性数组 props，得到所有属性组成的字符串
+ * 如果不存在动态属性，则返回：
+ *   'attrName,attrVal,...'
+ * 如果存在动态属性，则返回：
+ *   '_d(静态属性字符串, 动态属性字符串)' 
+ */
 function genProps (props: Array<ASTAttr>): string {
+  // 静态属性
   let staticProps = ``
   let dynamicProps = ``
   for (let i = 0; i < props.length; i++) {

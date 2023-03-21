@@ -16,6 +16,7 @@ import { unicodeRegExp } from 'core/util/lang'
 // Regular Expressions for parsing tags and attributes
 const attribute = /^\s*([^\s"'<>\/=]+)(?:\s*(=)\s*(?:"([^"]*)"+|'([^']*)'+|([^\s"'=<>`]+)))?/
 const dynamicArgAttribute = /^\s*((?:v-[\w-]+:|@|:|#)\[[^=]+?\][^\s"'<>\/=]*)(?:\s*(=)\s*(?:"([^"]*)"+|'([^']*)'+|([^\s"'=<>`]+)))?/
+
 const ncname = `[a-zA-Z_][\\-\\.0-9_a-zA-Z${unicodeRegExp.source}]*`
 const qnameCapture = `((?:${ncname}\\:)?${ncname})`
 const startTagOpen = new RegExp(`^<${qnameCapture}`)
@@ -237,10 +238,11 @@ export function parseHTML (html, options) {
   }
 
   /**
-   * 解析开始标签 ，比如<div id='app'>
+   * 解析开始标签 ，比如<div id='app' v-if='show' v-for=''>
    * @returns 
    */
   function parseStartTag () {
+    // start = {0: "<div",1: "div",groups: undefined,index: 0,input: "<div><span><span></div>"}
     const start = html.match(startTagOpen)
     if (start) {
       // 处理结果
