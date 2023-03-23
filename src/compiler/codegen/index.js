@@ -152,8 +152,14 @@ export function genElement (el: ASTElement, state: CodegenState): string {
   }
 }
 
+/**
+ * 生成静态节点的渲染函数
+ * 1、将当前静态节点的渲染函数放到 staticRenderFns 数组中
+ * 2、返回一个可执行函数_m(idx,true or '')
+ * */ 
 // hoist static sub-trees out
 function genStatic (el: ASTElement, state: CodegenState): string {
+  // 标记当前静态节点已经被处理过了
   el.staticProcessed = true
   // Some elements (templates) need to behave differently inside of a v-pre
   // node.  All pre nodes are static roots, so we can use this as a location to
@@ -162,6 +168,8 @@ function genStatic (el: ASTElement, state: CodegenState): string {
   if (el.pre) {
     state.pre = el.pre
   }
+  // 将静态根节点的渲染函数 push 到 staticRenderFns 数组中，比如：
+  // [`with(this){return _c(tag, data, children)}`]
   state.staticRenderFns.push(`with(this){return ${genElement(el, state)}}`)
   state.pre = originalPreState
   return `_m(${
@@ -171,12 +179,22 @@ function genStatic (el: ASTElement, state: CodegenState): string {
   })`
 }
 
-// v-once
+/**
+ * 处理带有 v-once 指令的节点，结果会有三种：
+ *   1、当前节点存在 v-if 指令，得到一个三元表达式，condition ? render1 : render2
+ *   2、当前节点是一个包含在 v-for 指令内部的静态节点，得到 `_o(_c(tag, data, children), number, key)`
+ *   3、当前节点就是一个单纯的 v-once 节点，得到 `_m(idx, true of '')`
+ */
 function genOnce (el: ASTElement, state: CodegenState): string {
+  // 标记当前节点的v-once 指令已经被处理过了
   el.onceProcessed = true
   if (el.if && !el.ifProcessed) {
+    // 如果含有v-if指令 && if 指令没有被处理过，则走这里
+    // 处理带有v-if指令的节点，最终得到一个三元表达式，condition?render1:render2
     return genIf(el, state)
   } else if (el.staticInFor) {
+    // 说明当前节点是被包裹在还有v-for 指令节点内部的静态节点
+    // 获取 v-for 指令的key
     let key = ''
     let parent = el.parent
     while (parent) {
@@ -186,6 +204,7 @@ function genOnce (el: ASTElement, state: CodegenState): string {
       }
       parent = parent.parent
     }
+    // key 不存在则给出提示，v-once 节点只能用于带有key 的v-for 节点内部
     if (!key) {
       process.env.NODE_ENV !== 'production' && state.warn(
         `v-once can only be used inside v-for that is keyed. `,
@@ -193,19 +212,27 @@ function genOnce (el: ASTElement, state: CodegenState): string {
       )
       return genElement(el, state)
     }
+    // 生成 `_o(_c(tag,data,children),number,key)`
     return `_o(${genElement(el, state)},${state.onceId++},${key})`
   } else {
+    // 上面几种情况都不符合，说明就是一个简单的静态节点，和处理静态根节点时的操作一样
+    // 得到_m(idx,true or '')
     return genStatic(el, state)
   }
 }
 
+/**
+ * 处理带有 v-if 指令的节点，最终得到一个三元表达式，condition ? render1 : render2 
+ */
 export function genIf (
   el: any,
   state: CodegenState,
   altGen?: Function,
   altEmpty?: string
 ): string {
+  // 标记当前节点的 v-if 指令已经被处理过了，避免无效的递归
   el.ifProcessed = true // avoid recursion
+  // 得到三元表达式，condition ? render1 : render2
   return genIfConditions(el.ifConditions.slice(), state, altGen, altEmpty)
 }
 
@@ -215,12 +242,18 @@ function genIfConditions (
   altGen?: Function,
   altEmpty?: string
 ): string {
+  // 长度若为空，则直接返回一个空节点渲染函数
   if (!conditions.length) {
     return altEmpty || '_e()'
   }
 
+  // 从 conditions 数组中拿出第一个条件对象 { exp, block }
   const condition = conditions.shift()
+  // 返回结果是一个三元表达式字符串，condition?渲染函数1：渲染函数2
   if (condition.exp) {
+    // 如果conditon.exp 条件成立，则得到一个三元表达式
+    // 如果条件不成立，则通过递归的方式找conditions 数组 中下一个元素
+    // 直到找到条件成立的元素，然后返回一个三元表达式
     return `(${condition.exp})?${
       genTernaryExp(condition.block)
     }:${
@@ -240,17 +273,26 @@ function genIfConditions (
   }
 }
 
+
+/**
+ * 处理节点上的 v-for 指令  
+ * 得到 `_l(exp, function(alias, iterator1, iterator2){return _c(tag, data, children)})`
+ */
 export function genFor (
   el: any,
   state: CodegenState,
   altGen?: Function,
   altHelper?: string
 ): string {
+   // v-for 的迭代器，比如 一个数组
   const exp = el.for
+  // 迭代时的别名
   const alias = el.alias
+  // iterator 为 v-for = "(item ,idx) in obj" 时会有，比如 iterator1 = idx
   const iterator1 = el.iterator1 ? `,${el.iterator1}` : ''
   const iterator2 = el.iterator2 ? `,${el.iterator2}` : ''
 
+  // 提示，v-for 指令在组件上时必须使用 key
   if (process.env.NODE_ENV !== 'production' &&
     state.maybeComponent(el) &&
     el.tag !== 'slot' &&
@@ -266,7 +308,9 @@ export function genFor (
     )
   }
 
+  // 标记当前节点上的 v-for 指令已经被处理过了
   el.forProcessed = true // avoid recursion
+  // 得到 `_l(exp, function(alias, iterator1, iterator2){return _c(tag, data, children)})`
   return `${altHelper || '_l'}((${exp}),` +
     `function(${alias}${iterator1}${iterator2}){` +
       `return ${(altGen || genElement)(el, state)}` +
@@ -649,9 +693,16 @@ export function genComment (comment: ASTText): string {
   return `_e(${JSON.stringify(comment.text)})`
 }
 
+/**
+ * 生成插槽的渲染函数，得到
+ * _t(slotName, children, attrs, bind)
+ */
 function genSlot (el: ASTElement, state: CodegenState): string {
+  // 插槽名称
   const slotName = el.slotName || '"default"'
+  // 生成所有的子节点
   const children = genChildren(el, state)
+  // 结果字符串，_t(slotName, children, attrs, bind)
   let res = `_t(${slotName}${children ? `,function(){return ${children}}` : ''}`
   const attrs = el.attrs || el.dynamicAttrs
     ? genProps((el.attrs || []).concat(el.dynamicAttrs || []).map(attr => ({
