@@ -31,6 +31,7 @@ extend(Vue.options.directives, platformDirectives)
 extend(Vue.options.components, platformComponents)
 
 // install platform patch function
+// 在Vue 原型链上安装web 平台的 patch 函数
 Vue.prototype.__patch__ = inBrowser ? patch : noop
 
 // public mount method
@@ -41,7 +42,7 @@ Vue.prototype.$mount = function (
 ): Component {
   //判断el 存在和 浏览器环境，非浏览器环境，则el 等于undefined
   el = el && inBrowser ? query(el) : undefined
-  // 
+  // 首次渲染，执行_update()和_render()
   return mountComponent(this, el, hydrating)
 }
 

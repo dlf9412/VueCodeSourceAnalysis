@@ -67,10 +67,15 @@ function createKeyToOldIdx (children, beginIdx, endIdx) {
   return map
 }
 
+// 工厂函数，注入平台特有的一些功能操作，并定义一些方法，然后返回 patch 函数
 export function createPatchFunction (backend) {
   let i, j
   const cbs = {}
 
+  /**
+   * modules: { ref, directives, 平台特有的一些操纵，比如 attr、class、style 等 }
+   * nodeOps: { 对元素的增删改查 API，例如createElement }
+   */
   const { modules, nodeOps } = backend
 
   for (i = 0; i < hooks.length; ++i) {
