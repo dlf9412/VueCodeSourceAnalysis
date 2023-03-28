@@ -78,10 +78,19 @@ export function createPatchFunction (backend) {
    */
   const { modules, nodeOps } = backend
 
+  /**
+   * hooks=['create','activate','update','remove','destory']
+   * 遍历这些钩子，然后从modules 的各个模块中找到相应的方法，比如：directives 中的 create、update、destory 方法
+   * 让这些方法放到 cb[hook]=[hook方法]中，比如 cb.create=[fn1,fn2,...]
+   * 然后在合适的时间调用相应的钩子方法完成对应的操作
+   * */ 
   for (i = 0; i < hooks.length; ++i) {
+    // 比如cbs.create=[]
     cbs[hooks[i]] = []
     for (j = 0; j < modules.length; ++j) {
       if (isDef(modules[j][hooks[i]])) {
+        // 遍历各个modules,找出各个module 中的create 方法，然后添加到cbs.create数组中
+        // 例如：cb.create=[attrs.create,events.create]
         cbs[hooks[i]].push(modules[j][hooks[i]])
       }
     }
@@ -704,7 +713,14 @@ export function createPatchFunction (backend) {
     }
   }
 
+  /**
+   * vm._patch_
+   * 1.新节点不存在，老节点存在，调用destory,销毁老节点
+   * 2、如果oldVnode 是真实元素，则表示首次渲染，创建新节点，并插入 body，然后移除老节点
+   * 3、如果oldVnode 不是真实元素，则表示更新阶段，执行patchVnode
+   */
   return function patch (oldVnode, vnode, hydrating, removeOnly) {
+    // 如果新节点不存在，老节点存在，则调用 destory，销毁老节点
     if (isUndef(vnode)) {
       if (isDef(oldVnode)) invokeDestroyHook(oldVnode)
       return
@@ -714,16 +730,21 @@ export function createPatchFunction (backend) {
     const insertedVnodeQueue = []
 
     if (isUndef(oldVnode)) {
-      // empty mount (likely as component), create new root element
+      // 新的Vnode  存在，老的Vnode 不存在，这种情况会在一个组件初次渲染的时候出现，比如：
+      // <div id="app"><comp></comp></div>
+      // 这里 的 comp 组件初次渲染时就会走这儿
       isInitialPatch = true
       createElm(vnode, insertedVnodeQueue)
     } else {
+      // 判断 oldVnode 是否为真实元素
       const isRealElement = isDef(oldVnode.nodeType)
       if (!isRealElement && sameVnode(oldVnode, vnode)) {
-        // patch existing root node
+        // 不是真实元素，但是老节点和新节点是同一个节点，则是更新阶段，执行patch 更新节点
         patchVnode(oldVnode, vnode, insertedVnodeQueue, null, null, removeOnly)
       } else {
+        // 是真实元素，则表示初次渲染
         if (isRealElement) {
+          // 挂载到真实元素以及处理服务端渲染的情况
           // mounting to a real element
           // check if this is server-rendered content and if we can perform
           // a successful hydration.
@@ -745,6 +766,7 @@ export function createPatchFunction (backend) {
               )
             }
           }
+          // 走到这儿说明不是服务端渲染，或者
           // either not server-rendered, or hydration failed.
           // create an empty node and replace it
           oldVnode = emptyNodeAt(oldVnode)
